@@ -23,6 +23,3 @@ class ECMoorings:
             "names": parameters_sel['name'].tolist(),
             "cols_enum": np.arange(len(parameters_sel))
         }
-
-    def load_previous_data():
-        pass

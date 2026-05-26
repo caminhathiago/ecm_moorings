@@ -214,8 +214,11 @@ def args_auswaves_processing():
     parser.add_argument('-anv', '--add-new-variable', dest='add_new_variable', action="store_true",
                         help="Allow adding new variables in the new data that are not present in the previous data when concatenating them.",
                         required=False)
-
     
+    parser.add_argument('-erfs', '--enable-region-folder-structure', dest='enable_region_folder_structure', action="store_true",
+                        help="Enable the use of region-specific folder structures in the S3 bucket.",
+                        required=False)
+
     vargs = parser.parse_args()
 
     # if vargs.output_path is None:
@@ -267,6 +270,11 @@ def args_auswaves_processing():
 
     if vargs.backfill_wb_log:
         vargs.backfill_wb_log = datetime.strptime(vargs.backfill_wb_log[0],"%Y%m%dT%H%M%S")
+
+    if vargs.enable_region_folder_structure:
+        vargs.enable_region_folder_structure = True
+    else:        
+        vargs.enable_region_folder_structure = False
 
     return vargs
 

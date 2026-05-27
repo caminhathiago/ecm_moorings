@@ -96,28 +96,41 @@ class ProcessEagleIOData:
     #     return df
     
     @staticmethod
-    def response_to_dataframe(response_json: dict) -> pd.DataFrame:
+    def response_to_dataframe(response_json: dict|list) -> pd.DataFrame:
 
-        if not response_json or not response_json.get("data"):
+        if not response_json:
             return pd.DataFrame()
 
-        header_cols = response_json.get("header", {}).get("columns", {})
+        if isinstance(response_json, dict) and not response_json.get("data"):
+            return pd.DataFrame()
+        
+        dfs = []
+        for resp in response_json:
 
-        index_to_name = {
-            str(idx): meta["name"]
-            for idx, meta in header_cols.items()
-        }
+            header_cols = resp.get("header", {}).get("columns", {})
 
-        df = pd.json_normalize(response_json["data"])
+            index_to_name = {
+                str(idx): meta["name"]
+                for idx, meta in header_cols.items()
+            }
 
-        df = df.rename(columns=lambda c: c.replace("f.", "").replace(".v", ""))
+            df = pd.json_normalize(resp["data"])
 
-        df = df.rename(columns=index_to_name)
+            df = df.rename(columns=lambda c: c.replace("f.", "").replace(".v", ""))
 
-        if "ts" in df.columns:
-            df["ts"] = pd.to_datetime(df["ts"], utc=True)
+            df = df.rename(columns=index_to_name)
 
-        return df
+            if "ts" in df.columns:
+                df["ts"] = pd.to_datetime(df["ts"], utc=True)
+
+            if df.empty:
+                continue
+            
+            dfs.append(df)
+
+        dfs = pd.concat(dfs, ignore_index=True)
+
+        return dfs
 
     @staticmethod
     def map_columns(parameters_payload: dict) -> dict:

@@ -224,6 +224,14 @@ def args_auswaves_processing():
     # if vargs.output_path is None:
     #     vargs.output_path = tempfile.mkdtemp()
     
+    if vargs.window:
+        try:
+            vargs.window = int(vargs.window)
+        except ValueError:
+            raise ValueError(
+                f"Invalid value for --window: '{vargs.window}'. Must be an integer."
+            )
+
     if not os.path.exists(vargs.output_path):
         try:
             os.makedirs(vargs.output_path)

@@ -52,17 +52,23 @@ def extract_raw():
     raw_data = EAPI.fetch_historic_data(
         params_ids=parameters_payload['ids'],
         start_datetime=start_datetime,
-        end_datetime=end_datetime
+        end_datetime=end_datetime,
+        param_ids_pagination=len(parameters_payload['ids']),
+        time_pagination=5,
+        request_timeout=5,
+        max_retries=3,
+        logger=SITE_LOGGER
     )
+    
+    SITE_LOGGER.info("Converting new data to dataframe")
+    new_raw_data = ProcessEagleIOData.response_to_dataframe(raw_data)
 
     SITE_LOGGER.info("Extracting previous data")
     previous_raw_data = extract_previous(start_datetime, end_datetime, site, data_folder="raw_data")
 
-    SITE_LOGGER.info("Converting new data to dataframe")
-    new_raw_data = ProcessEagleIOData.response_to_dataframe(raw_data)
 
     no_data_code = 0
-    if not EAPI.check_new_data(raw_data=raw_data, dataset_type="data"):
+    if not EAPI.check_new_data(raw_data=new_raw_data):
         log_message = "No data for the desired period. Aborting processing for this site"
         SITE_LOGGER.warning(log_message)
         GENERAL_LOGGER.info(log_message)

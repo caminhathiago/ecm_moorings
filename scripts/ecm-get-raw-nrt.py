@@ -40,12 +40,12 @@ def load_site_id_parameters(site, ecm_sites, ecm_parameters):
 
     return SITE_ID, SITE_ECM_PARAMETERS
 
-def extract():
-    SITE_LOGGER.info("EXTRACT ---------------")
+def extract_raw():
+    SITE_LOGGER.info("EXTRACT RAW DATA ---------------")
 
     parameters_payload = ECM.create_parameters_payload(SITE_ECM_PARAMETERS)
 
-    start_datetime = datetime.now(UTC) - timedelta(hours=24)
+    start_datetime = datetime.now(UTC) - timedelta(hours=vargs.window)
     end_datetime = datetime.now(UTC) + timedelta(minutes=10)
 
     SITE_LOGGER.info(f"Extracting data from Eagle.io for the period: {start_datetime} to {end_datetime}")
@@ -56,10 +56,10 @@ def extract():
     )
 
     SITE_LOGGER.info("Extracting previous data")
-    previous_data = extract_previous(start_datetime, end_datetime, site)
+    previous_raw_data = extract_previous(start_datetime, end_datetime, site, data_folder="raw_data")
 
     SITE_LOGGER.info("Converting new data to dataframe")
-    new_raw_data = ProcessEagleIOData.response_to_dataframe(raw_data, parameters_payload)
+    new_raw_data = ProcessEagleIOData.response_to_dataframe(raw_data)
 
     no_data_code = 0
     if not EAPI.check_new_data(raw_data=raw_data, dataset_type="data"):
@@ -68,21 +68,19 @@ def extract():
         GENERAL_LOGGER.info(log_message)
         no_data_code = ProcessEagleIOData.NO_DATA_CODES['period']
 
-    if not ProcessEagleIOData.check_previous_new_data(previous_data, new_raw_data):
+    if not ProcessEagleIOData.check_previous_new_data(previous_raw_data, new_raw_data):
         log_message = "No new data transmitted since last pipeline execution. Aborting processing for this site"
         SITE_LOGGER.warning(log_message)
         GENERAL_LOGGER.info(log_message)
         no_data_code = ProcessEagleIOData.NO_DATA_CODES['transmission']
 
     return {
-        "previous_data":previous_data,
+        "previous_raw_data":previous_raw_data,
         "new_raw_data": new_raw_data,
         "no_data_code": no_data_code,
     }
 
-def extract_previous(window_start_time, window_end_date, site):
-
-    # from nrt.aws.aws import CWBAWSS3
+def extract_previous(window_start_time, window_end_date, site, data_folder="raw_data"):
 
     SITE_LOGGER.info(f"Connecting to AWS S3")
     cwb_s3 = CWBAWSS3(
@@ -94,7 +92,7 @@ def extract_previous(window_start_time, window_end_date, site):
     )
 
     SITE_LOGGER.info(f"Generating list of needed csv files from S3 for the period")
-    needed_csvs = cwb_s3.generate_needed_files_s3keys(site, window_start_time.date(), window_end_date.date())
+    needed_csvs = cwb_s3.generate_needed_files_s3keys(site, window_start_time.date(), window_end_date.date(), vargs.enable_region_folder_structure, data_folder=data_folder)
 
     # needed_csvs = ['auswaves/vicwaves/Bob/text_archive/2026/04/Bob_20260410.csv', 'auswaves/vicwaves/Bob/text_archive/2026/04/Bob_20260411.csv']
 
@@ -107,82 +105,26 @@ def extract_previous(window_start_time, window_end_date, site):
 
     return previous_data  
 
-def transform(data:dict) -> dict:
-    SITE_LOGGER.info("TRANSFORM ---------------")
+def transform_raw(data):
+    SITE_LOGGER.info("TRANSFORM RAW DATA ---------------")
 
-    new_data = data['new_raw_data']
-
-    SITE_LOGGER.info("Creating site name and serial columns")
-    new_data['site'] = site["name"]
-    new_data['buoy_id'] = site["serial"]
-
-    SITE_LOGGER.info("Converting timestamp")
-    new_data = ProcessEagleIOData.convert_to_datetime(new_data, old_col="ts", new_col="timestamp")   
-
-    SITE_LOGGER.info("Converting units")
-    new_data = ProcessEagleIOData.convert_units(new_data, SITE_ECM_PARAMETERS)
-    
-    SITE_LOGGER.info("Correcting directional data to true north")
-    new_data = ProcessEagleIOData.correct_true_north(new_data,
-                                                     latitude=site['DeployLat'],
-                                                     longitude=site['DeployLon']
-                                                     )     
-
-    SITE_LOGGER.info("Interpoloating lat/lon to match higher frequency of other parameters")
-    new_data = ProcessEagleIOData.interpolate_latlon(new_data)
-
-    SITE_LOGGER.info("Creating time unix column")
-    new_data = ProcessEagleIOData.process_time_unix_column(new_data, method='create')
-    
-    SITE_LOGGER.info("Conforming columns to AusWaves format")
-    new_data = ProcessEagleIOData.conform_cols_to_auswaves(new_data, strip=True)
-    
-    SITE_LOGGER.info("Creating missing AusWaves columns with NaN values")
-    new_data = ProcessEagleIOData.create_missing_columns(new_data)
-    
-    SITE_LOGGER.info("Dropping unwanted columns")
-    new_data = ProcessEagleIOData.drop_unwanted_columns(new_data)
-
-    SITE_LOGGER.info("Filling missing values with -9999")
-    new_data = ProcessEagleIOData.fill_nan_9999(new_data)
-    
-    SITE_LOGGER.info("Reordering columns to match AusWaves format")
-    new_data = ProcessEagleIOData.reorder_cols(new_data)
-
-    if data['previous_data'] is None:
-        SITE_LOGGER.info("No previous data to concatenate. Returning new data only from Transformation step.")
-        return new_data
-
-    SITE_LOGGER.info("Previous data found")
-
-    SITE_LOGGER.info("Stripping columns names of previous data")
-    previous_data = ProcessEagleIOData.strip_columns(data['previous_data'])
-    
-    SITE_LOGGER.info("Converting timestamp of previous data")
-    previous_data = ProcessEagleIOData.convert_to_datetime(previous_data, old_col="Timestamp (UTC)", new_col="Timestamp (UTC)")
-    
     SITE_LOGGER.info("Concatenating previous and new data")
-    all_data = ProcessEagleIOData.concat_previous_new(previous_data, new_data, overwrite=False, add_new_variable=vargs.add_new_variable)
+    all_raw_data = ProcessEagleIOData.concat_previous_new(data['previous_raw_data'],
+                                                          data['new_raw_data'],
+                                                          overwrite=False,
+                                                          add_new_variable=vargs.add_new_variable,
+                                                          raw_data=True)
 
-    SITE_LOGGER.info("Filling missing values with -9999")
-    all_data = ProcessEagleIOData.fill_nan_9999(all_data)
+    SITE_LOGGER.info("Converting time to datetime")
+    all_raw_data = ProcessEagleIOData.convert_to_datetime(all_raw_data, old_col="ts", new_col="ts", drop_old=False)
 
-    SITE_LOGGER.info("Dropping duplicates based on timestamp as a safeguard in case of any overlaps")
-    all_data = ProcessEagleIOData.drop_timestamp_duplicates(all_data, time_col="Timestamp (UTC)")
-
-    return all_data 
-
-def load(data):
-    SITE_LOGGER.info("LOAD ---------------")
+    SITE_LOGGER.info("Splitting raw data into daily dataframes")
+    raw_data_daily = ProcessEagleIOData.split_data_daily(all_raw_data)
     
-    SITE_LOGGER.info("Conforming columns to AusWaves format for loading")
-    data = ProcessEagleIOData.conform_cols_to_auswaves(data, strip=False)
+    return raw_data_daily
 
-    SITE_LOGGER.info("Splitting data into daily dataframes")
-    data_daily = ProcessEagleIOData.split_data_daily(data)
-
-    SITE_LOGGER.info("Conforming timestamp to AusWaves format")
-    data_daily = ProcessEagleIOData.conform_timestamp_format_auswaves(data_daily)
+def load_raw_data(data:dict) -> None:
+    SITE_LOGGER.info("LOAD RAW DATA ---------------")
 
     SITE_LOGGER.info(f"Creating to AWS S3 payload")
     s3_payload_kwargs = {
@@ -206,7 +148,7 @@ def load(data):
     cwb_s3 = CWBAWSS3(**s3_payload_kwargs)
 
     SITE_LOGGER.info("Generating daily csv keys for AWS S3")
-    data_daily = cwb_s3.generate_daily_csv_keys(data_daily, site)
+    data_daily = cwb_s3.generate_daily_csv_keys(data, site, vargs.enable_region_folder_structure, data_folder="raw_data")
 
     try:
         for day in data_daily:
@@ -244,15 +186,15 @@ if __name__ == "__main__":
             
             SITE_ID, SITE_ECM_PARAMETERS = load_site_id_parameters(site, ECM_SITES, ECM_PARAMETERS)
             
-            data = extract()
+            raw_data = extract_raw()
             
-            if isinstance(data['no_data_code'], int) and data['no_data_code'] in ProcessEagleIOData.NO_DATA_CODES.values():
+            if isinstance(raw_data['no_data_code'], int) and raw_data['no_data_code'] in ProcessEagleIOData.NO_DATA_CODES.values():
                 imos_logging.logging_stop(logger=SITE_LOGGER)
                 continue
 
-            data = transform(data)
+            raw_data_daily = transform_raw(raw_data)
 
-            load(data)
+            load_raw_data(raw_data_daily)
         
             GENERAL_LOGGER.info(f"{site['name'].upper()} processing completed successfully")
             SITE_LOGGER.info(f"{site['name'].upper()} processing completed successfully")

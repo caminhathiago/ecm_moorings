@@ -32,23 +32,33 @@ class CWBAWSS3:
 
         return pd.date_range(start_datetime, end_datetime)
     
-    def compose_prefix(self, region:str, site_name:str, date:datetime) -> str:
+    def compose_prefix(self, region:str | None, site_name:str, date:datetime, data_folder:str="text_archive") -> str:
 
-        year = date.year 
-        month = date.month if date.month >= 10 else f"0{date.month}" 
-        day = date.day if date.day >= 10 else f"0{date.day}" 
+        year = date.year
+        month = f"{date.month:02d}"
+        day = f"{date.day:02d}"
+
         file_name = f"{site_name}_{year}{month}{day}.csv"
 
-        return os.path.join(
-                    # self._bucket,
-                    self._prefix,
-                    f"{region}waves", 
-                    site_name, 
-                    "text_archive", 
-                    f"{year}",
-                    f"{month}",
-                    file_name
-                ).replace("\\", "/")
+        path_parts = [
+            self._prefix,
+        ]
+
+        if region:
+            path_parts.append(f"{region}waves")
+
+        if data_folder not in ("raw_data", "text_archive"):
+            raise ValueError(f"Invalid data_folder: {data_folder}. Must be 'raw_data' or 'text_archive'.")
+
+        path_parts.extend([
+            site_name,
+            data_folder,
+            str(year),
+            month,
+            file_name
+        ])
+
+        return os.path.join(*path_parts).replace("\\", "/")
 
 
     # def list_csvs(self, date:datetime, site_name:str) -> None:
@@ -58,16 +68,25 @@ class CWBAWSS3:
     #     response = self.s3.list_objects_v2(Bucket=self._bucket, Prefix=self._prefix)
 
     
-    def generate_needed_files_s3keys(self, site:pd.Series, start_datetime:datetime, end_datetime:datetime) -> list:
+    def generate_needed_files_s3keys(self,
+                                     site:pd.Series,
+                                     start_datetime:datetime,
+                                     end_datetime:datetime,
+                                     enable_region_folder_structure:bool=False,
+                                     data_folder:str="text_archive") -> list:
 
-        region = self.get_region(site)
+        if enable_region_folder_structure:
+            region = self.get_region(site)
+        else:
+            region = None
+        
         date_range = self.compute_date_range(start_datetime, end_datetime)
 
         needed_files_keys = []
         for date in date_range:
             
             needed_files_keys.append(
-                self.compose_prefix(region, site['name'], date)
+                self.compose_prefix(region, site['name'], date, data_folder)
             )
 
         return needed_files_keys
@@ -108,12 +127,15 @@ class CWBAWSS3:
 
         return missing_data_errors, dfs
 
-    def generate_daily_csv_keys(self, data_daily:list[dict], site:str) -> list[dict]:
+    def generate_daily_csv_keys(self, data_daily:list[dict], site:str, enable_region_folder_structure:bool=False, data_folder:str="text_archive") -> list[dict]:
 
-        region = self.get_region(site)
+        if enable_region_folder_structure:
+            region = self.get_region(site)
+        else:
+            region = None
 
         for day in data_daily:
-            day['s3Key'] = self.compose_prefix(region, site['name'], day['date'])
+            day['s3Key'] = self.compose_prefix(region, site['name'], day['date'], data_folder=data_folder)
 
         return data_daily
 

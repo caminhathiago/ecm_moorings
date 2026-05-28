@@ -23,6 +23,10 @@ PACKAGE_INCLUDES = [
     "nrt*",
 ]
 
+PACKAGE_DATA = {
+    "nrt.config": ["*.csv"]
+}
+
 
 setup(
     name='ecm-moorings',
@@ -33,6 +37,8 @@ setup(
     url='',
     install_requires=read_requirements('requirements.txt'),
     packages=find_packages(include=PACKAGE_INCLUDES, exclude=PACKAGE_EXCLUDES),
+    include_package_data=True,
+    package_data=PACKAGE_DATA,
     zip_safe=False,
     python_requires='>3.8'
 )

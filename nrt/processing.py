@@ -32,8 +32,8 @@ class ProcessEagleIOData:
         "DCS - Direction": ('CurrentDir (deg)', False),
 
         # Coords
-        'Latitude': ('Latitude (deg)', False),
-        'Longitude': ('Longitude (deg)', False),
+        'Ai1 - Latitude': ('Latitude (deg)', False),
+        'Ai1 - Longitude': ('Longitude (deg)', False),
     }
 
     COLS_ORDER = (
@@ -248,17 +248,22 @@ class ProcessEagleIOData:
     @staticmethod
     def interpolate_latlon(data:pd.DataFrame) -> pd.DataFrame:
         
-        if 'Latitude' in data.columns and 'Longitude' in data.columns:
+        lat_col = [col for col in data.columns if "latitude" in col.lower()]
+        lon_col = [col for col in data.columns if "longitude" in col.lower()]
+
+        if lat_col and lon_col:
             
-            data['Latitude'] = (
-                data['Latitude']
+            lat_col, lon_col = lat_col[0], lon_col[0]
+            
+            data[lat_col] = (
+                data[lat_col]
                 .interpolate(method='nearest', limit_direction='both')
                 .bfill()
                 .ffill()
             )
             
-            data['Longitude'] = (
-                data['Longitude']
+            data[lon_col] = (
+                data[lon_col]
                 .interpolate(method='nearest', limit_direction='both')
                 .bfill()
                 .ffill()
@@ -290,6 +295,8 @@ class ProcessEagleIOData:
 
         concat_data = pd.concat([previous_data, new_data], ignore_index=True)
         
+        concat_data = concat_data.drop_duplicates(subset='ts')
+
         return concat_data
 
     @staticmethod

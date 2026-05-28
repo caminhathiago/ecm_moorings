@@ -55,6 +55,7 @@ def extract_raw():
         end_datetime=end_datetime,
         param_ids_pagination=len(parameters_payload['ids']),
         time_pagination=5,
+        time_pagination_limit=vargs.time_pagination_limit,
         request_timeout=5,
         max_retries=3,
         logger=SITE_LOGGER
@@ -74,11 +75,12 @@ def extract_raw():
         GENERAL_LOGGER.info(log_message)
         no_data_code = ProcessEagleIOData.NO_DATA_CODES['period']
 
-    if not ProcessEagleIOData.check_previous_new_data(previous_raw_data, new_raw_data):
-        log_message = "No new data transmitted since last pipeline execution. Aborting processing for this site"
-        SITE_LOGGER.warning(log_message)
-        GENERAL_LOGGER.info(log_message)
-        no_data_code = ProcessEagleIOData.NO_DATA_CODES['transmission']
+    if not vargs.overwrite:
+        if not ProcessEagleIOData.check_previous_new_data(previous_raw_data, new_raw_data):
+            log_message = "No new data transmitted since last pipeline execution. Aborting processing for this site"
+            SITE_LOGGER.warning(log_message)
+            GENERAL_LOGGER.info(log_message)
+            no_data_code = ProcessEagleIOData.NO_DATA_CODES['transmission']
 
     return {
         "previous_raw_data":previous_raw_data,
@@ -117,7 +119,7 @@ def transform_raw(data):
     SITE_LOGGER.info("Concatenating previous and new data")
     all_raw_data = ProcessEagleIOData.concat_previous_new(data['previous_raw_data'],
                                                           data['new_raw_data'],
-                                                          overwrite=False,
+                                                          overwrite=vargs.overwrite,
                                                           add_new_variable=vargs.add_new_variable,
                                                           raw_data=True)
 

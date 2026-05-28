@@ -89,7 +89,10 @@ class EagleIOClient:
        
         results = []
         time_page_count = 0
-        for t0, t1 in self.paginate_request_time(start_datetime, end_datetime, time_pagination, time_pagination_limit):
+        for t0, t1 in self.paginate_request_time(start_datetime,
+                                                 end_datetime, 
+                                                 step_hours=time_pagination,
+                                                 page_limit=time_pagination_limit):
             
             time_page_count += 1
             logger.info(f"Time page: {time_page_count}")

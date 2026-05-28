@@ -60,7 +60,7 @@ class EagleIOClient:
         sleep = min(60, (2 ** attempt) + random.uniform(0, 1))
 
         logger.warning(
-            f"{log_message_prefix} (attempt {attempt+1}/{max_retries}). "
+            f"{log_message_prefix} (attempt {attempt}/{max_retries}). "
             f"Retrying in {sleep:.1f}s"
         )
 
@@ -109,7 +109,8 @@ class EagleIOClient:
                 }
                 
                 response = None
-                for attempt in range(max_retries):
+                errors = {}
+                for attempt in range(1,max_retries+1):
 
                     try:
                         response = requests.get(
@@ -118,7 +119,8 @@ class EagleIOClient:
                             params=args,
                             timeout=request_timeout
                         )
-                    except requests.exceptions.Timeout:
+                    except requests.exceptions.Timeout as e:
+                        errors[f"attempt_{attempt}"] = str(e)
                         self.retry_setup(attempt, max_retries, logger, "Timeout")
                         continue
 
@@ -129,13 +131,16 @@ class EagleIOClient:
                         break
 
                     if response.status_code == 413:
+                        errors[f"attempt_{attempt}"] = f"Error {response.status_code} - {response.text}"
                         self.retry_setup(attempt, max_retries, logger, "413")
                         continue
 
-                    raise Exception(f"{response.status_code} - {response.text}")
+                    exception_text = f"{response.status_code} - {response.text}"
+                    errors[f"attempt_{attempt+1}"] = exception_text
+                    raise Exception(exception_text)
 
                 else:
-                    raise Exception(f"Max retries exceeded: {response.status_code} - {response.text}")
+                    raise Exception(f"Max retries exceeded. Errors appended:", json.dumps(errors, indent=2))
 
                 results.append(response.json())
 

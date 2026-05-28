@@ -129,6 +129,21 @@ def transform_raw(data):
     
     return raw_data_daily
 
+def load_raw_data_locally(data:dict):
+    SITE_LOGGER.info("LOAD RAW DATA LOCALLY ---------------")
+
+    SITE_LOGGER.info("Generating daily csv local paths")
+    data_daily = ECM.generate_daily_csv_paths(data, site, vargs.incoming_path, vargs.enable_region_folder_structure, data_folder="raw_data")
+
+    try:
+        for day in data_daily:
+            ECM.save_daily_csvs(day)
+            SITE_LOGGER.info(f"successfully saved file: {day['local_path']}")
+
+    except Exception as e:
+        raise e
+
+
 def load_raw_data(data:dict) -> None:
     SITE_LOGGER.info("LOAD RAW DATA ---------------")
 
@@ -199,8 +214,9 @@ if __name__ == "__main__":
                 continue
 
             raw_data_daily = transform_raw(raw_data)
-
+            
             load_raw_data(raw_data_daily)
+            load_raw_data_locally(raw_data_daily)
         
             GENERAL_LOGGER.info(f"{site['name'].upper()} processing completed successfully")
             SITE_LOGGER.info(f"{site['name'].upper()} processing completed successfully")

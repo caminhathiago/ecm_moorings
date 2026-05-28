@@ -158,6 +158,21 @@ def transform(data:dict) -> dict:
 
     return processed_data_daily 
 
+def load_data_locally(data:dict):
+    SITE_LOGGER.info("LOAD DATA LOCALLY ---------------")
+
+    SITE_LOGGER.info("Generating daily csv local paths")
+    data_daily = ECM.generate_daily_csv_paths(data, site, vargs.incoming_path, vargs.enable_region_folder_structure, data_folder="text_archive")
+
+    try:
+        for day in data_daily:
+            ECM.save_daily_csvs(day)
+            SITE_LOGGER.info(f"successfully saved file: {day['local_path']}")
+
+    except Exception as e:
+        raise e
+
+
 def load(data_daily):
     SITE_LOGGER.info("LOAD PROCESSED DATA ---------------")
 
@@ -230,6 +245,7 @@ if __name__ == "__main__":
             processed_data_daily = transform(raw_data)
 
             load(processed_data_daily)
+            load_data_locally(processed_data_daily)
         
             GENERAL_LOGGER.info(f"{site['name'].upper()} processing completed successfully")
             SITE_LOGGER.info(f"{site['name'].upper()} processing completed successfully")

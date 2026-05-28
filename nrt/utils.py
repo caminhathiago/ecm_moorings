@@ -160,6 +160,10 @@ def args_auswaves_processing():
                         help="desired window from present backwards to be processed and qualified. Default to 24, please check argument --window-unit for the right desired unit.",
                         required=False)
 
+    parser.add_argument('-pl', '--time-pagination-limit', dest='time_pagination_limit', type=str, default=10,
+                        help="desired number of pages to be set as limit. Default to 10.",
+                        required=False)
+
     parser.add_argument('-wu', '--window-unit', dest='window_unit', type=str, default="hours",
                         help="desired window unit (hours:Default, months).",
                         required=False)
@@ -230,6 +234,14 @@ def args_auswaves_processing():
         except ValueError:
             raise ValueError(
                 f"Invalid value for --window: '{vargs.window}'. Must be an integer."
+            )
+        
+    if vargs.time_pagination_limit:
+        try:
+            vargs.time_pagination_limit = int(vargs.time_pagination_limit)
+        except ValueError:
+            raise ValueError(
+                f"Invalid value for --time-pagination_limit: '{vargs.time_pagination_limit}'. Must be an integer."
             )
 
     if not os.path.exists(vargs.output_path):

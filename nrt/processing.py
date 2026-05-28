@@ -18,41 +18,18 @@ class ProcessEagleIOData:
         'site': ('Site', False),
         'buoy_id': ('BuoyID', False),
 
-        # Waves
-        'significantWaveHeight': ('Hsig (m)', False),
-        'significantWaveHeight_swell': ('Hsig_swell (m)', False),
-        'significantWaveHeight_sea': ('Hsig_sea (m)', False),
-        'peakPeriod': ('Tp (s)', False),
-        'meanPeriod': ('Tm (s)', True),
-        'meanPeriod_swell': ('Tm_swell (s)', False),
-        'meanPeriod_sea': ('Tm_sea (s)', False),
-        'peakDirection': ('Dp (deg)', False),
-        'peakDirectionalSpread': ('DpSpr (deg)', False),
-        'meanDirection': ('Dm (deg)', False),
-        'meanDirection_swell': ('Dm_swell (deg)', False),
-        'meanDirection_sea': ('Dm_sea (deg)', False),
-        'meanDirectionalSpread': ('DmSpr (deg)', False),
-        'meanDirectionalSpread_swell': ('DmSpr_swell (deg)', False),
-        'meanDirectionalSpread_sea': ('DmSpr_sea (deg)', False),
-        'WAVE_quality_control': ('QF_waves', True),
-
-        # SST
-        'degrees': ('SST (degC)', False),
+        # Water Quality
+        'WQ - WQ(1)- Temperature': ('SST (degC)', False),
         'TEMP_quality_control_sst': ('QF_sst', False),
-
-        'bottom_temp': ('Bottom Temp (degC)', False),
-        'TEMP_quality_control_bottom': ('QF_bott_temp', False),
+        "WQ - WQ(3) Salinity PSU": ('Salinity (PSU)', False),
 
         # Winds
-        'WindSpeedAvg': ('WindSpeed (m/s)', False),
-        'WindDirection': ('WindDirec (deg)', False),
+        'Weather - WindSpeedAvg': ('WindSpeed (m/s)', False),
+        'Weather - WindDirection': ('WindDirec (deg)', False),
 
         # DSC currents:
-        "Abs-Speed": ('CurrmentMag (m/s)', False),
-        "Direction": ('CurrentDir (deg)', False),
-
-        # Water Quality
-        "WQ(3) Salinity PSU": ('Salinity (PSU)', False),
+        "DCS - Abs-Speed": ('CurrmentMag (m/s)', False),
+        "DCS - Direction": ('CurrentDir (deg)', False),
 
         # Coords
         'Latitude': ('Latitude (deg)', False),
@@ -86,28 +63,74 @@ class ProcessEagleIOData:
     }
 
     @staticmethod
-    def get_time_col_name(data:pd.DataFrame) -> str:
-        return [col for col in data.columns if "timestamp" in col.lower()][0]
+    def get_time_col_name(data: pd.DataFrame) -> str:
 
-    @staticmethod
-    def response_to_dataframe(response_json: dict, parameters_payload: dict) -> pd.DataFrame:
+        candidates = [
+            col for col in data.columns
+            if "timestamp" in col.lower() or col.lower() == "ts"
+        ]
+
+        if not candidates:
+            raise ValueError("No time column found (expected 'timestamp' or 'ts')")
+
+        return candidates[0]
+
+    # @staticmethod
+    # def response_to_dataframe(response_json: dict, parameters_payload: dict) -> pd.DataFrame:
         
-        if response_json is None or not response_json.get("data"):
-            return
+    #     if response_json is None or not response_json.get("data"):
+    #         return
 
-        df = (
-        pd.json_normalize(response_json["data"])
-        .rename(columns=lambda c: c.replace("f.", "").replace(".v", ""))
-        )
+    #     df = (
+    #     pd.json_normalize(response_json["data"])
+    #     .rename(columns=lambda c: c.replace("f.", "").replace(".v", ""))
+    #     )
 
-        col_map = ProcessEagleIOData.map_columns(parameters_payload)
+    #     col_map = ProcessEagleIOData.map_columns(parameters_payload)
 
-        df = df.rename(columns=col_map)
+    #     df = df.rename(columns=col_map)
 
-        if "ts" in df.columns:
-            df["ts"] = pd.to_datetime(df["ts"])
+    #     if "ts" in df.columns:
+    #         df["ts"] = pd.to_datetime(df["ts"])
 
-        return df
+    #     return df
+    
+    @staticmethod
+    def response_to_dataframe(response_json: dict|list) -> pd.DataFrame:
+
+        if not response_json:
+            return pd.DataFrame()
+
+        if isinstance(response_json, dict) and not response_json.get("data"):
+            return pd.DataFrame()
+        
+        dfs = []
+        for resp in response_json:
+
+            header_cols = resp.get("header", {}).get("columns", {})
+
+            index_to_name = {
+                str(idx): meta["name"]
+                for idx, meta in header_cols.items()
+            }
+
+            df = pd.json_normalize(resp["data"])
+
+            df = df.rename(columns=lambda c: c.replace("f.", "").replace(".v", ""))
+
+            df = df.rename(columns=index_to_name)
+
+            if "ts" in df.columns:
+                df["ts"] = pd.to_datetime(df["ts"], utc=True)
+
+            if df.empty:
+                continue
+            
+            dfs.append(df)
+
+        dfs = pd.concat(dfs, ignore_index=True)
+
+        return dfs
 
     @staticmethod
     def map_columns(parameters_payload: dict) -> dict:
@@ -130,9 +153,11 @@ class ProcessEagleIOData:
         if previous_data is None or previous_data.empty:
             return new_raw_data is not None and not new_raw_data.empty       
         
-        latest_previous_time = pd.to_datetime(previous_data[' Timestamp (UTC)'], utc=True).max()
+        previous_time_col = ProcessEagleIOData.get_time_col_name(previous_data)
+        latest_previous_time = pd.to_datetime(previous_data[previous_time_col], utc=True).max()
 
-        latest_new_time = pd.to_datetime(new_raw_data['ts']).max()
+        new_raw_time_col = ProcessEagleIOData.get_time_col_name(new_raw_data)
+        latest_new_time = pd.to_datetime(new_raw_data[new_raw_time_col]).max()
 
         if latest_previous_time >= latest_new_time:
             return False
@@ -140,16 +165,23 @@ class ProcessEagleIOData:
         return True
 
     @staticmethod
-    def convert_to_datetime(df: pd.DataFrame, old_col:str="ts", new_col:str="timestamp") -> pd.DataFrame:
+    def convert_to_datetime(df: pd.DataFrame, old_col:str="ts", new_col:str="timestamp", drop_old:bool=False) -> pd.DataFrame:
+        
         df[new_col] = pd.to_datetime(df[old_col], utc=True)
         df = df.sort_values(new_col)
+
+        if drop_old:
+            return df.drop(columns=old_col)
+        
         return df
 
     @staticmethod
-    def process_time_unix_column(data:pd.DataFrame, method:str='create', time_col:str="ts") -> pd.DataFrame:
+    def process_time_unix_column(data:pd.DataFrame, method:str='create') -> pd.DataFrame:
         
-        time_unix_col = 'time_unix'
+        time_col = ProcessEagleIOData.get_time_col_name(data)
 
+        time_unix_col = 'time_unix'
+        
         if method == 'create':
             data[time_unix_col] = data[time_col].astype("int64") // 10**6
 
@@ -238,9 +270,13 @@ class ProcessEagleIOData:
     def concat_previous_new(previous_data:pd.DataFrame,
                             new_data:pd.DataFrame,
                             overwrite:bool=False,
-                            add_new_variable:bool=False) -> pd.DataFrame:
+                            add_new_variable:bool=False,
+                            raw_data:bool=False) -> pd.DataFrame:
 
-        if not add_new_variable:
+        if previous_data is None:
+            return new_data
+
+        if not add_new_variable and not raw_data:
             if not previous_data.columns.equals(new_data.columns):
                 raise KeyError(f"Mismatch of columns between new_data and previous data. new_data columns: {new_data.columns}; previous_data columns:{previous_data.columns}")
 
@@ -265,11 +301,11 @@ class ProcessEagleIOData:
         return data[time_col].dt.date.unique()
 
     @staticmethod
-    def split_data_daily(data:pd.DataFrame, time_col=" Timestamp (UTC)") -> pd.DataFrame:
+    def split_data_daily(data:pd.DataFrame) -> pd.DataFrame:
 
-        # time_col = ProcessEagleIOData.get_time_col_name(data)
+        time_col = ProcessEagleIOData.get_time_col_name(data)
 
-        dates = ProcessEagleIOData.extract_dates_from_dataframe(data)
+        dates = ProcessEagleIOData.extract_dates_from_dataframe(data, time_col)
 
         dfs = []
         for date in dates:

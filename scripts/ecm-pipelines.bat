@@ -1,4 +1,4 @@
-echo off
+@echo off
 
 set arg1=%1
 
@@ -35,8 +35,7 @@ if "%arg1%"=="ecm-get-raw-nrt" (
     -e > %INCOMING_PATH%\task_scheduler_logs\ecm-proc-auswaves-csvs.log 2>&1
     echo [FINISHED] %DATE% %TIME%
 
-)
- else (
+) else (
     echo [ERROR] Invalid script name provided.
     exit /b 1
 )

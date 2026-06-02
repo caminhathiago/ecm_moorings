@@ -12,6 +12,8 @@ import smtplib
 import socket
 import pandas as pd
 
+from nrt.alerts.alerts import AlertEvent
+
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -96,3 +98,70 @@ class Email:
                             <b>runtime</b>: {datetime.now()}</p>"""
 
         return f"<html><head></head><body>{email_title}{email_content}</body></html>"
+    
+
+class EmailAlerts:
+
+    def __init__(self, email_from: str, email_to: str | list[str]):
+        self.email_from = email_from
+        self.email_to = email_to if isinstance(email_to, list) else [email_to]
+        self.email_pwd = os.getenv("EMAIL_FROM_APP_PASSWORD")
+
+    def build_subject(self, event: AlertEvent) -> str:
+        return event.title
+    
+    def build_content(self, event: AlertEvent) -> str:
+
+        return f"""
+        <html>
+            <body>
+                <h3>{event.title}</h3>
+
+                <p><b>Site:</b> {event.site_name}</p>
+                <p><b>Alert:</b> {event.message}</p>
+                <p><b>Timestamp:</b> {event.timestamp}</p>
+            </body>
+        </html>
+        """
+    
+
+    def send(self, event: AlertEvent, attachments: list[str] | None = None):
+
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = self.build_subject(event)
+        msg["From"] = self.email_from
+        msg["To"] = ", ".join(self.email_to)
+
+        msg.attach(MIMEText(self.build_content(event), "html"))
+
+        # # Attach files if provided
+        # if attachments:
+        #     for file_path in attachments:
+        #         if os.path.exists(file_path):
+        #             with open(file_path, "rb") as f:
+        #                 part = MIMEApplication(f.read(), Name=os.path.basename(file_path))
+        #                 part["Content-Disposition"] = f'attachment; filename="{os.path.basename(file_path)}"'
+        #                 msg.attach(part)
+
+        try:
+            socket.setdefaulttimeout(10)
+
+            server = smtplib.SMTP_SSL("smtp.gmail.com", 465)
+            server.ehlo()
+
+            print("Logging into email server...")
+            server.login(self.email_from, self.email_pwd)
+
+            print(f"Sending email to {self.email_to}...")
+            server.sendmail(self.email_from, self.email_to, msg.as_string())
+
+            print("Email sent successfully.")
+
+        except (smtplib.SMTPException, socket.timeout) as e:
+            print(f"Error sending email: {e}")
+
+        finally:
+            try:
+                server.quit()
+            except Exception:
+                pass

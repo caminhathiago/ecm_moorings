@@ -19,20 +19,29 @@ for /f "usebackq tokens=1,* delims==" %%A in ("%ROOT_DIR%\.env") do (
 REM Conditional execution based on the passed argument
 if "%arg1%"=="ecm-get-raw-nrt" (
     echo [STARTED] %DATE% %TIME%
-    %PYTHON_EXEC% "%ROOT_DIR%\scripts\ecm-get-raw-nrt.py" ^
+    %PYTHON_EXEC% "%ROOT_DIR%\scripts\%arg1%.py" ^
     -o %INCOMING_PATH% ^
     -i %INCOMING_PATH% ^
     --window 5 ^
-    -e > %INCOMING_PATH%\task_scheduler_logs\ecm-get-raw-nrt.log 2>&1
+    -e > %INCOMING_PATH%\task_scheduler_logs\%arg1%.log 2>&1
     echo [FINISHED] %DATE% %TIME%
 
 ) else if "%arg1%"=="ecm-proc-auswaves-csvs" (
     echo [STARTED] %DATE% %TIME%
-    %PYTHON_EXEC% "%ROOT_DIR%\scripts\ecm-proc-auswaves-csvs.py" ^
+    %PYTHON_EXEC% "%ROOT_DIR%\scripts\%arg1%.py" ^
     -o %INCOMING_PATH% ^
     -i %INCOMING_PATH% ^
     --window 5 ^
-    -e > %INCOMING_PATH%\task_scheduler_logs\ecm-proc-auswaves-csvs.log 2>&1
+    -e > %INCOMING_PATH%\task_scheduler_logs\%arg1%.log 2>&1
+    echo [FINISHED] %DATE% %TIME%
+
+) else if "%arg1%"=="ecm-alerts" (
+    echo [STARTED] %DATE% %TIME%
+    %PYTHON_EXEC% "%ROOT_DIR%\scripts\%arg1%.py" ^
+    -o %INCOMING_PATH% ^
+    -i %INCOMING_PATH% ^
+    --window 5 ^
+    -e > %INCOMING_PATH%\task_scheduler_logs\%arg1%.log 2>&1
     echo [FINISHED] %DATE% %TIME%
 
 ) else (

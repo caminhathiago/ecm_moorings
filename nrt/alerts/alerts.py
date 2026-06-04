@@ -164,4 +164,49 @@ class TimefenceAlert(Alert):
             message=f"Last data point is {latest_time:.1f} hours old.",
         )
 
+
+class BatteryVoltageAlert(Alert):
+    
+    def __init__(self, site_name:str, min_voltage=float(11.0)):
+        super().__init__("BatteryVoltage")
+        self.site_name = site_name
+        self.min_voltage = min_voltage
+
+    def get_time_col(self, data:pd.DataFrame) -> str:
+        timestamp_col = None
+
+        for col in data.columns:
+            if "time" in col.lower() or "ts" in col.lower():
+                timestamp_col = col
+                break
+
+        return timestamp_col
+    
+    def get_voltage_col(self, data:pd.DataFrame) -> str:
         
+        voltage_col = None
+        for col in data.columns:
+            if "batteryvoltage" in col.lower():
+                voltage_col = col
+                break
+
+        return voltage_col
+
+    def evaluate(self, data:pd.DataFrame):
+        
+        voltage_col = self.get_voltage_col(data)
+
+        if voltage_col is None:
+            raise ValueError("No BatteryVoltage column found for battery voltage evaluation.")
+
+        latest_voltage = data[voltage_col].iloc[-1]
+
+        triggered = latest_voltage < self.min_voltage
+
+        return AlertEvent(
+            triggered=triggered,
+            site_name=self.site_name,
+            alert_type="battery_voltage_alert",
+            title=f"{self.site_name} buoy battery < {self.min_voltage} V",
+            message=f"Latest voltage reading is {latest_voltage:.2f} V (< {self.min_voltage} V).",
+        )

@@ -10,7 +10,7 @@ from nrt.ecmoorings import ECMoorings
 from nrt.aws.aws import CWBAWSS3
 from nrt.utils import SITE_LOGGER, IMOSLogging, args_auswaves_processing
 from nrt.alerts.email import Email, EmailAlerts
-from nrt.alerts.alerts import GeofenceAlert, TimefenceAlert
+from nrt.alerts.alerts import GeofenceAlert, TimefenceAlert, BatteryVoltageAlert
 
 
 def generate_general_logger(vargs):
@@ -100,9 +100,17 @@ def evaluate_alerts(raw_data):
         ).evaluate(raw_data['raw_data'])
     )
 
+    battery_results = (
+        BatteryVoltageAlert(
+            site_name=site['name'],
+            min_voltage=10.0,
+        ).evaluate(raw_data['raw_data'])
+    )
+
     return {
         "geofence_alert": geofence_results,
-        "timefence_alert": timefence_results
+        "timefence_alert": timefence_results,
+        "battery_voltage_alert": battery_results
     }
 
 def notify(alerts_results, site):

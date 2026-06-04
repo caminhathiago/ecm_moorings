@@ -103,7 +103,7 @@
 102,2,6968178ee712366d930dccda,DCS,DCS - Max-Tilt,degrees,
 103,2,6968178ee712366d930dccde,DCS,DCS - Std-Tilt,degrees,
 104,2,6968178ee712366d930dcce2,DCS,DCS - DCS-Temp-ZPulseOnly,degC,
-105,2,6968178ee712366d930dcce6,WQ,WQ - WQ(1)- Temperature,,
+105,2,6968178ee712366d930dcce6,WQ,WQ - WQ(1) Temperature,,
 106,2,6968178ee712366d930dccea,WQ,WQ - WQ(2) Specific Conductivity,,
 107,2,6968178ee712366d930dccee,WQ,WQ - WQ(3) Salinity PSU,,
 108,2,6968178ee712366d930dccf2,WQ,WQ - WQ(4) Wiper Position,,

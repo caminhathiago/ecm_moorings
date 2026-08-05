@@ -172,7 +172,6 @@ def load_data_locally(data:dict):
     except Exception as e:
         raise e
 
-
 def load(data_daily):
     SITE_LOGGER.info("LOAD PROCESSED DATA ---------------")
 
@@ -207,6 +206,31 @@ def load(data_daily):
 
     except Exception as e:
         raise e
+
+def ecm_last_update(data_daily):
+    SITE_LOGGER.info("UPDATING ecm.csv ---------------")
+
+    SITE_LOGGER.info(f"Connecting to AWS S3")
+    cwb_s3 = CWBAWSS3(
+            aws_access_key_id=os.getenv('AUSWAVES_AWS_S3_ACCESS_KEY_ID'),
+            aws_secret_access_key=os.getenv('AUSWAVES_AWS_S3_ACCESS_KEY_SECRET'),
+            region_name=os.getenv('AUSWAVES_AWS_S3_REGION'),
+            bucket=os.getenv('AUSWAVES_AWS_S3_BUCKET'),                        
+            prefix=os.getenv('AUSWAVES_AWS_S3_PREFIX'),                        
+        )
+
+    SITE_LOGGER.info(f"Getting ecm.csv from AWS S3")
+    ecm_df = cwb_s3.get_ecm_csv()
+
+    SITE_LOGGER.info(f"Updating ecm.csv with last update for {site['name']}")
+    ecm_df = cwb_s3.update_last_update_ecm_csv(site["name"], data_daily, ecm_df)
+
+    SITE_LOGGER.info(f"Putting updated ecm.csv to AWS S3")
+    cwb_s3.put_ecm_csv(ecm_df)
+
+    SITE_LOGGER.info(f"Successfully updated ecm.csv with last update for {site['name']}")
+
+
 
 if __name__ == "__main__":
 
@@ -246,6 +270,8 @@ if __name__ == "__main__":
 
             load(processed_data_daily)
             load_data_locally(processed_data_daily)
+
+            ecm_last_update(processed_data_daily)
         
             GENERAL_LOGGER.info(f"{site['name'].upper()} processing completed successfully")
             SITE_LOGGER.info(f"{site['name'].upper()} processing completed successfully")

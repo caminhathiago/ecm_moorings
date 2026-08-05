@@ -19,6 +19,7 @@ class CWBAWSS3:
 
         self._bucket = bucket
         self._prefix = prefix
+        self._ecm_key = os.path.join(self._prefix, "ecm.csv").replace("\\", "/")
 
 
     def get_region(self, site) -> str:
@@ -151,3 +152,36 @@ class CWBAWSS3:
             Key=day['s3Key'],
             Body=csv_buffer.getvalue()
         )
+
+    def get_ecm_csv(self) -> pd.DataFrame:
+
+        try:
+            response = self.s3.get_object(Bucket=self._bucket, Key=self._ecm_key)
+            ecm_df = pd.read_csv(response['Body'])  
+        except ClientError as e:
+            raise e
+
+        return ecm_df
+
+    def update_last_update_ecm_csv(self, site_name: str, data_daily: list[dict], ecm_df:pd.DataFrame) -> pd.DataFrame:
+
+        latest_timestamp = data_daily[-1]['data']['Time (UNIX/UTC)'].max()
+        
+        ecm_df.loc[ecm_df['label'] == site_name, 'last_updated'] = latest_timestamp
+
+        return ecm_df
+
+
+    def put_ecm_csv(self, ecm_df:pd.DataFrame) -> None:
+
+        from io import StringIO
+
+        csv_buffer = StringIO()
+        ecm_df.to_csv(csv_buffer, index=False)
+
+        self.s3.put_object(
+            Bucket=self._bucket,
+            Key=self._ecm_key,
+            Body=csv_buffer.getvalue()
+        )
+    

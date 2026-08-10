@@ -20,6 +20,7 @@ class ProcessEagleIOData:
 
         # Water Quality
         'WQ - WQ(1)- Temperature': ('SST (degC)', False),
+        'WQ - WQ(1) Temperature': ('SST (degC)', False),
         'TEMP_quality_control_sst': ('QF_sst', False),
         "WQ - WQ(3) Salinity PSU": ('Salinity (PSU)', False),
 

@@ -45,7 +45,7 @@ def extract_raw():
 
 
     SITE_LOGGER.info("Extracting previous data")
-    raw_data = extract_previous(start_datetime, end_datetime, site, data_folder="raw_data")
+    raw_data, window_start_time, window_end_date = extract_previous(start_datetime, end_datetime, site, data_folder="raw_data")
 
     no_data_code = 0
 
@@ -53,6 +53,8 @@ def extract_raw():
         "raw_data":raw_data,
         # "new_raw_data": new_raw_data,
         "no_data_code": no_data_code,
+        "window_start_time":window_start_time,
+        "window_end_time":window_end_date
     }
 
 def extract_previous(window_start_time, window_end_date, site, data_folder="raw_data"):
@@ -78,15 +80,7 @@ def extract_previous(window_start_time, window_end_date, site, data_folder="raw_
         for error in missing_data_errors:
             SITE_LOGGER.warning(f"No csvs found for: {error['s3Key']}. Error raised: {error['error']}")
 
-    if previous_data is None or previous_data.empty:
-
-        gap_period_calc = window_end_date - datetime.now(UTC)
-        
-        raise ValueError(f"""No raw data found for the desired period.
-The system is either under a gap for at least or no longer operational.
-Estimated gap period: {gap_period_calc}, since {window_end_date} UTC""")
-
-    return previous_data  
+    return previous_data, window_end_date, window_start_time
 
 def evaluate_alerts(raw_data):
 
@@ -161,6 +155,11 @@ if __name__ == "__main__":
         try:
             
             raw_data = extract_raw()
+
+            if raw_data['raw_data'] is None or raw_data['raw_data'].empty:
+                gap_period_calc = raw_data['window_end_date'] - datetime.now(UTC)
+                imos_logging.logging_stop(logger=SITE_LOGGER)
+                continue
 
             if isinstance(raw_data['no_data_code'], int) and raw_data['no_data_code'] in ProcessEagleIOData.NO_DATA_CODES.values():
                 imos_logging.logging_stop(logger=SITE_LOGGER)

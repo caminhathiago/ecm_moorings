@@ -129,6 +129,9 @@ class ProcessEagleIOData:
             
             dfs.append(df)
 
+        if not dfs:
+            return
+        
         dfs = pd.concat(dfs, ignore_index=True)
 
         return dfs

@@ -64,9 +64,12 @@ def extract_raw():
     SITE_LOGGER.info("Converting new data to dataframe")
     new_raw_data = ProcessEagleIOData.response_to_dataframe(raw_data)
 
+    if new_raw_data is None:
+        SITE_LOGGER.warning(f"""No raw data found for the desired period. The system is either under a gap or no longer operational.""")
+        return
+
     SITE_LOGGER.info("Extracting previous data")
     previous_raw_data = extract_previous(start_datetime, end_datetime, site, data_folder="raw_data")
-
 
     no_data_code = 0
     if not EAPI.check_new_data(raw_data=new_raw_data):
@@ -210,8 +213,14 @@ if __name__ == "__main__":
             SITE_ID, SITE_ECM_PARAMETERS = load_site_id_parameters(site, ECM_SITES, ECM_PARAMETERS)
             
             raw_data = extract_raw()
-            
-            if isinstance(raw_data['no_data_code'], int) and raw_data['no_data_code'] in ProcessEagleIOData.NO_DATA_CODES.values():
+
+            if (
+                raw_data is None
+                or (
+                    isinstance(raw_data['no_data_code'], int)
+                    and raw_data['no_data_code'] in ProcessEagleIOData.NO_DATA_CODES.values()
+                )
+            ):
                 imos_logging.logging_stop(logger=SITE_LOGGER)
                 continue
 

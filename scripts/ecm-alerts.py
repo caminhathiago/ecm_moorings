@@ -78,6 +78,14 @@ def extract_previous(window_start_time, window_end_date, site, data_folder="raw_
         for error in missing_data_errors:
             SITE_LOGGER.warning(f"No csvs found for: {error['s3Key']}. Error raised: {error['error']}")
 
+    if previous_data is None or previous_data.empty:
+
+        gap_period_calc = window_end_date - datetime.now(UTC)
+        
+        raise ValueError(f"""No raw data found for the desired period.
+The system is either under a gap for at least or no longer operational.
+Estimated gap period: {gap_period_calc}, since {window_end_date} UTC""")
+
     return previous_data  
 
 def evaluate_alerts(raw_data):

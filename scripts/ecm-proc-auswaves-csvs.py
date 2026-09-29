@@ -261,6 +261,12 @@ if __name__ == "__main__":
             SITE_ID, SITE_ECM_PARAMETERS = load_site_id_parameters(site, ECM_SITES, ECM_PARAMETERS)
             
             raw_data = extract_raw()
+
+            if raw_data['raw_data'] is None or raw_data['raw_data'].empty:
+                SITE_LOGGER.warning(f"""No raw data found for the desired period.
+                                        The system is either under a gap for at least or no longer operational.""")
+                imos_logging.logging_stop(logger=SITE_LOGGER)
+                continue
             
             if isinstance(raw_data['no_data_code'], int) and raw_data['no_data_code'] in ProcessEagleIOData.NO_DATA_CODES.values():
                 imos_logging.logging_stop(logger=SITE_LOGGER)

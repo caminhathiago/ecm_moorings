@@ -266,8 +266,7 @@ if __name__ == "__main__":
             raw_data = extract_raw()
 
             if raw_data['raw_data'] is None or raw_data['raw_data'].empty:
-                SITE_LOGGER.warning(f"""No raw data found for the desired period.
-                                        The system is either under a gap for at least or no longer operational.""")
+                SITE_LOGGER.warning(f"""No raw data found for the desired period. The system is either under a gap or no longer operational.""")
                 imos_logging.logging_stop(logger=SITE_LOGGER)
                 continue
             

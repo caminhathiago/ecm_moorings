@@ -54,7 +54,7 @@ def extract_raw():
         # "new_raw_data": new_raw_data,
         "no_data_code": no_data_code,
         "window_start_time":window_start_time,
-        "window_end_time":window_end_date
+        "window_end_date":window_end_date
     }
 
 def extract_previous(window_start_time, window_end_date, site, data_folder="raw_data"):

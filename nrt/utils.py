@@ -42,7 +42,7 @@ def args_processing():
                         required=False)
 
     parser.add_argument('-wu', '--window-unit', dest='window_unit', type=str, default="hours",
-                        help="desired window unit (hours:Default, months).",
+                        help="desired window unit (hours:Default, days).",
                         required=False)
 
     parser.add_argument('-bfw', '--backfill-wb-log', dest='backfill_wb_log', type=str, default=None, nargs=1,
@@ -134,7 +134,14 @@ def args_processing():
     if vargs.backfill_wb_log:
         vargs.backfill_wb_log = datetime.strptime(vargs.backfill_wb_log[0],"%Y%m%dT%H%M%S")
 
+    if vargs.window_unit not in ("hours", "days"):
+        raise ValueError(
+            f"Invalid value for --window-unit: '{vargs.window_unit}'. Must be 'hours' or 'days'."
+        )
+
     return vargs
+
+
 
 def args_auswaves_processing():
     """

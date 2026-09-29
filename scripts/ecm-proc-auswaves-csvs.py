@@ -45,7 +45,7 @@ def extract_raw():
 
     # parameters_payload = ECM.create_parameters_payload(SITE_ECM_PARAMETERS)
 
-    start_datetime = datetime.now(UTC) - timedelta(hours=vargs.window)
+    start_datetime = datetime.now(UTC) - timedelta(**{vargs.window_unit: vargs.window})
     end_datetime = datetime.now(UTC) + timedelta(minutes=10)
 
     # SITE_LOGGER.info(f"Extracting data from Eagle.io for the period: {start_datetime} to {end_datetime}")
@@ -249,6 +249,9 @@ if __name__ == "__main__":
 
     sites_error_logs = []
 
+    if vargs.site_to_process:
+        BUOYS_METADATA = BUOYS_METADATA[BUOYS_METADATA['name'].isin(vargs.site_to_process)]
+
     for idx, site in BUOYS_METADATA.iterrows():
         
         GENERAL_LOGGER.info(f"=========== {site["name"].upper()} processing ===========")
@@ -261,6 +264,12 @@ if __name__ == "__main__":
             SITE_ID, SITE_ECM_PARAMETERS = load_site_id_parameters(site, ECM_SITES, ECM_PARAMETERS)
             
             raw_data = extract_raw()
+
+            if raw_data['raw_data'] is None or raw_data['raw_data'].empty:
+                SITE_LOGGER.warning(f"""No raw data found for the desired period.
+                                        The system is either under a gap for at least or no longer operational.""")
+                imos_logging.logging_stop(logger=SITE_LOGGER)
+                continue
             
             if isinstance(raw_data['no_data_code'], int) and raw_data['no_data_code'] in ProcessEagleIOData.NO_DATA_CODES.values():
                 imos_logging.logging_stop(logger=SITE_LOGGER)

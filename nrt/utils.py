@@ -172,7 +172,8 @@ def args_auswaves_processing():
                         required=False)
 
     parser.add_argument('-wu', '--window-unit', dest='window_unit', type=str, default="hours",
-                        help="desired window unit (hours:Default, months).",
+                        choices=["minutes", "hours", "days", "weeks"],
+                        help="desired window unit (minutes, hours:Default, days, weeks).",
                         required=False)
 
     parser.add_argument('-bfw', '--backfill-wb-log', dest='backfill_wb_log', type=str, default=None, nargs=1,

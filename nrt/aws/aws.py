@@ -114,9 +114,9 @@ class CWBAWSS3:
                     missing_data_errors.append({"s3Key":key, "error":str(e)})
                     continue
 
-                if error_code == "AccessDenied":
-                    raise e
-            
+                # any other error: don't fall through and re-read a stale response
+                raise e
+
             dfs.append(
                 pd.read_csv(response['Body'])
             )
@@ -124,7 +124,7 @@ class CWBAWSS3:
         if not dfs:
             dfs = None
         else:
-            dfs = pd.concat(dfs)
+            dfs = pd.concat(dfs, ignore_index=True)
 
         return missing_data_errors, dfs
 

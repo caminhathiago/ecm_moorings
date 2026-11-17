@@ -32,6 +32,7 @@ if "%arg1%"=="ecm-get-raw-nrt" (
     -o %INCOMING_PATH% ^
     -i %INCOMING_PATH% ^
     --window 5 ^
+    --enable-qualification ^
     -e > %INCOMING_PATH%\task_scheduler_logs\%arg1%.log 2>&1
     echo [FINISHED] %DATE% %TIME%
 

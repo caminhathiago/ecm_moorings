@@ -1,7 +1,8 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from abc import ABC, abstractmethod
 from datetime import datetime, UTC
 
+import numpy as np
 import pandas as pd
 
 @dataclass
@@ -11,7 +12,8 @@ class AlertEvent:
     title: str
     message: str
     site_name: pd.Series | None = None
-    timestamp: datetime = datetime.now(UTC)
+    # default_factory: evaluated per event, not once at import time
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
     payload: dict | None = None
 
 
@@ -25,9 +27,32 @@ class Alert(ABC):
     def evaluate(self, buoy):
         pass
 
-    @abstractmethod
-    def get_time_col(self, data):
-        pass
+    def get_time_col(self, data: pd.DataFrame) -> str | None:
+        # exact names first: substring matching ("time"/"ts") also hits
+        # parameters such as "Ai1 - ProcessingTime" or "... Gusts"
+        for col in data.columns:
+            if col.strip().lower() in ("ts", "timestamp", "timestamp (utc)"):
+                return col
+
+        for col in data.columns:
+            if "timestamp" in col.lower():
+                return col
+
+        return None
+
+    def sort_by_time(self, data: pd.DataFrame) -> tuple[pd.DataFrame, str]:
+        time_col = self.get_time_col(data)
+        if time_col is None:
+            raise ValueError(f"No timestamp column found for {self.alert_type} evaluation.")
+
+        data = data.copy()
+        data[time_col] = pd.to_datetime(data[time_col], utc=True, errors="coerce")
+
+        if data[time_col].isna().any():
+            raise ValueError(f"Invalid timestamps found in data for {self.alert_type} evaluation.")
+
+        return data.sort_values(time_col), time_col
+
 
 class GeofenceAlert(Alert):
 
@@ -43,26 +68,15 @@ class GeofenceAlert(Alert):
         lon_col = None
 
         for col in data.columns:
-            if "lat" in col.lower():
+            if "latitude" in col.lower():
                 lat_col = col
-            elif "lon" in col.lower():
+            elif "longitude" in col.lower():
                 lon_col = col
 
         return lat_col, lon_col
-    
-    def get_time_col(self, data:pd.DataFrame) -> str:
-        timestamp_col = None
-
-        for col in data.columns:
-            if "time" in col.lower() or "ts" in col.lower():
-                timestamp_col = col
-                break
-
-        return timestamp_col
 
     def calculate_distance(self, lats, lons, lat_center, lon_center):
 
-        import numpy as np
         lats_radians = np.radians(lats)
         lons_radians = np.radians(lons)
         lat_center_radians = np.radians(lat_center)
@@ -74,28 +88,36 @@ class GeofenceAlert(Alert):
         R = 6371000
         a = np.sin(dlat/2)**2 + np.cos(lats_radians) * np.cos(lat_center_radians) * np.sin(dlon/2)**2
         distances = 2 * R * np.arcsin(np.sqrt(a))
-        
+
         return distances
 
-    def calculate_velocity(self, distances, timestamps):
-        
-        time_col = self.get_time_col(timestamps)
-        if time_col is None:
-            raise ValueError("No timestamp column found for velocity calculation.")
-        
-        timestamps = pd.to_datetime(timestamps[time_col])
-
+    def calculate_velocity(self, lats: pd.Series, lons: pd.Series, timestamps: pd.Series):
+        # drift speed between consecutive GPS fixes
+        step_m = self.calculate_distance(lats, lons, lats.shift(), lons.shift())
         time_diff = timestamps.diff().dt.total_seconds()
-        velocity_ms = distances / time_diff
+
+        velocity_ms = step_m / time_diff
         velocity_kt = velocity_ms * 1.94384
 
         return velocity_ms, velocity_kt
 
-
     def evaluate(self, data:pd.DataFrame):
 
         lat_col, lon_col = self.get_latlon_cols(data)
+        if lat_col is None or lon_col is None:
+            raise ValueError("No latitude/longitude columns found for geofence evaluation.")
+
+        data, time_col = self.sort_by_time(data)
         data = data.dropna(subset=[lat_col, lon_col])
+
+        if data.empty:
+            return AlertEvent(
+                triggered=False,
+                site_name=self.site_name,
+                alert_type="geofence_alert",
+                title=f"{self.site_name} has no GPS fixes",
+                message="No latitude/longitude values in the evaluated window.",
+            )
 
         distances_m = self.calculate_distance(
             data[lat_col],
@@ -104,7 +126,7 @@ class GeofenceAlert(Alert):
             self.lon
         )
 
-        velocity_ms, velocity_kt = self.calculate_velocity(distances_m, data)
+        velocity_ms, velocity_kt = self.calculate_velocity(data[lat_col], data[lon_col], data[time_col])
 
         triggered = distances_m.iloc[-1] > self.search_rad
 
@@ -118,10 +140,10 @@ class GeofenceAlert(Alert):
                 "distances_m": distances_m,
                 "velocity_ms": velocity_ms,
                 "velocity_kt": velocity_kt
-            }   
+            }
         )
 
-    
+
 class TimefenceAlert(Alert):
 
     def __init__(self, site_name:str, max_gap_hours=int(24)):
@@ -129,33 +151,14 @@ class TimefenceAlert(Alert):
         self.site_name = site_name
         self.max_gap_hours = max_gap_hours
 
-    def get_time_col(self, data:pd.DataFrame) -> str:
-        timestamp_col = None
-
-        for col in data.columns:
-            if "time" in col.lower() or "ts" in col.lower():
-                timestamp_col = col
-                break
-
-        return timestamp_col
-
     def evaluate(self, data:pd.DataFrame):
-        
-        time_col = self.get_time_col(data)
-        if time_col is None:
-            raise ValueError("No timestamp column found for timefence evaluation.")
-        
-        data[time_col] = pd.to_datetime(data[time_col], errors="coerce")
 
-        if data[time_col].isna().any():
-            raise ValueError("Invalid timestamps found in data for timefence evaluation.")
+        data, time_col = self.sort_by_time(data)
 
-        time_gap_hours = (datetime.now(UTC) - data[time_col]).dt.total_seconds() / 3600
-
-        latest_time = time_gap_hours.iloc[-1]
+        latest_time = (datetime.now(UTC) - data[time_col].max()).total_seconds() / 3600
 
         triggered = latest_time > self.max_gap_hours
-        
+
         return AlertEvent(
             triggered=triggered,
             site_name=self.site_name,
@@ -166,24 +169,14 @@ class TimefenceAlert(Alert):
 
 
 class BatteryVoltageAlert(Alert):
-    
+
     def __init__(self, site_name:str, min_voltage=float(11.0)):
         super().__init__("BatteryVoltage")
         self.site_name = site_name
         self.min_voltage = min_voltage
 
-    def get_time_col(self, data:pd.DataFrame) -> str:
-        timestamp_col = None
-
-        for col in data.columns:
-            if "time" in col.lower() or "ts" in col.lower():
-                timestamp_col = col
-                break
-
-        return timestamp_col
-    
     def get_voltage_col(self, data:pd.DataFrame) -> str:
-        
+
         voltage_col = None
         for col in data.columns:
             if "batteryvoltage" in col.lower():
@@ -193,13 +186,27 @@ class BatteryVoltageAlert(Alert):
         return voltage_col
 
     def evaluate(self, data:pd.DataFrame):
-        
+
         voltage_col = self.get_voltage_col(data)
 
         if voltage_col is None:
             raise ValueError("No BatteryVoltage column found for battery voltage evaluation.")
 
-        latest_voltage = data[voltage_col].iloc[-1]
+        data, _ = self.sort_by_time(data)
+
+        # rows from other sensors have no voltage; use the latest actual reading
+        voltages = pd.to_numeric(data[voltage_col], errors="coerce").dropna()
+
+        if voltages.empty:
+            return AlertEvent(
+                triggered=False,
+                site_name=self.site_name,
+                alert_type="battery_voltage_alert",
+                title=f"{self.site_name} has no battery voltage readings",
+                message="No battery voltage values in the evaluated window.",
+            )
+
+        latest_voltage = voltages.iloc[-1]
 
         triggered = latest_voltage < self.min_voltage
 

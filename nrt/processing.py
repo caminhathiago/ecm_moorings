@@ -187,7 +187,9 @@ class ProcessEagleIOData:
         time_unix_col = 'time_unix'
         
         if method == 'create':
-            data[time_unix_col] = data[time_col].astype("int64") // 10**6
+            # resolution-independent (pandas may store datetimes as ns, us, ...)
+            epoch = pd.Timestamp("1970-01-01", tz="UTC")
+            data[time_unix_col] = (pd.to_datetime(data[time_col], utc=True) - epoch) // pd.Timedelta(seconds=1)
 
         elif method == 'drop':
             reverse_map = {
@@ -289,17 +291,25 @@ class ProcessEagleIOData:
             if not previous_data.columns.equals(new_data.columns):
                 raise KeyError(f"Mismatch of columns between new_data and previous data. new_data columns: {new_data.columns}; previous_data columns:{previous_data.columns}")
 
+        time_col = ProcessEagleIOData.get_time_col_name(previous_data)
+
+        # previous data is read back from csv, so its times are strings;
+        # convert so comparisons and de-duplication against new data work
+        previous_data = previous_data.copy()
+        previous_data[time_col] = pd.to_datetime(previous_data[time_col], utc=True)
+        new_data = new_data.copy()
+        new_data[time_col] = pd.to_datetime(new_data[time_col], utc=True)
+
         if not overwrite:
-        
-            time_col = ProcessEagleIOData.get_time_col_name(previous_data)            
 
             latest_processed_time = previous_data[time_col].max()
 
             new_data = new_data[new_data[time_col] > latest_processed_time]
 
         concat_data = pd.concat([previous_data, new_data], ignore_index=True)
-        
-        concat_data = concat_data.drop_duplicates(subset='ts')
+
+        # on overwrite, new data replaces previous data for the same timestamp
+        concat_data = concat_data.drop_duplicates(subset=time_col, keep='last' if overwrite else 'first')
 
         return concat_data
 
@@ -326,10 +336,12 @@ class ProcessEagleIOData:
                   .reset_index()
             )
 
-            # swap order between timestamp and timeunix columns
-            cols = df.columns.tolist()
-            cols[0], cols[1] = cols[1], cols[0]
-            df = df[cols]
+            # set_index/reset_index moves the time column first; AusWaves csvs
+            # start with the unix time column. Raw data has no unix column, so
+            # its time column stays first.
+            unix_cols = [col for col in df.columns if "unix" in col.lower()]
+            if unix_cols:
+                df = df[unix_cols + [col for col in df.columns if col not in unix_cols]]
 
             dfs.append({"date":date, "data":df})
 
@@ -365,7 +377,7 @@ class ProcessEagleIOData:
             from_unit = param["unit"]
             to_unit = param["convert_unit_to"]
 
-            if from_unit == to_unit:
+            if from_unit == to_unit or param_name not in data.columns:
                 continue
 
             func = ProcessEagleIOData.UNIT_CONVERSIONS.get((from_unit, to_unit))

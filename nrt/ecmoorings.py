@@ -55,12 +55,9 @@ class ECMoorings:
                      date:datetime, 
                      data_folder:str="text_archive") -> str:
 
-        if region:
-            path_parts.append(f"{region}waves")
-
         if data_folder not in ("raw_data", "text_archive"):
             raise ValueError(f"Invalid data_folder: {data_folder}. Must be 'raw_data' or 'text_archive'.")
-        
+
         year = date.year
         month = f"{date.month:02d}"
         day = f"{date.day:02d}"
@@ -70,6 +67,10 @@ class ECMoorings:
         path_parts = [
             incoming_path,
         ]
+
+        # mirrors the S3 key structure: <prefix>/<region>waves/<site>/...
+        if region:
+            path_parts.append(f"{region}waves")
 
         path_parts.extend([
             "sites",

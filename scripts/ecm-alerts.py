@@ -40,7 +40,7 @@ def extract_raw():
 
     # parameters_payload = ECM.create_parameters_payload(SITE_ECM_PARAMETERS)
 
-    start_datetime = datetime.now(UTC) - timedelta(hours=vargs.window)
+    start_datetime = datetime.now(UTC) - timedelta(**{vargs.window_unit: vargs.window})
     end_datetime = datetime.now(UTC) + timedelta(minutes=10)
 
 
@@ -80,7 +80,7 @@ def extract_previous(window_start_time, window_end_date, site, data_folder="raw_
         for error in missing_data_errors:
             SITE_LOGGER.warning(f"No csvs found for: {error['s3Key']}. Error raised: {error['error']}")
 
-    return previous_data, window_end_date, window_start_time
+    return previous_data, window_start_time, window_end_date
 
 def evaluate_alerts(raw_data):
 
@@ -117,18 +117,29 @@ def evaluate_alerts(raw_data):
 
 def notify(alerts_results, site):
     
+    # buoys_metadata.csv stores recipients as "a@x;b@y"
+    email_to = [
+        email.strip() for email in str(site['alert_emails']).split(";")
+        if email.strip() and email.strip().lower() != "nan"
+    ]
+
     for alert_type, alert_event in alerts_results.items():
-        
-        if alert_event.triggered and site['send_alert_emails']:
-            SITE_LOGGER.warning(f"{alert_type} triggered: {alert_event.message}")
-            SITE_LOGGER.info(f"Sending email alert to: {site['alert_emails']}")
-            EmailAlerts(
-                    email_to=site['alert_emails'],
-                    email_from=os.getenv("EMAIL_FROM"),
-                    ).send(alert_event)
-    
-        else:
+
+        if not alert_event.triggered:
             SITE_LOGGER.info(f"{alert_type} not triggered.")
+            continue
+
+        SITE_LOGGER.warning(f"{alert_type} triggered: {alert_event.message}")
+
+        if not site['send_alert_emails'] or not email_to:
+            SITE_LOGGER.info("Alert emails disabled or no recipients for this site; no email sent.")
+            continue
+
+        SITE_LOGGER.info(f"Sending email alert to: {email_to}")
+        EmailAlerts(
+                email_to=email_to,
+                email_from=os.getenv("EMAIL_FROM"),
+                ).send(alert_event)
 
 if __name__ == "__main__":
 
@@ -145,6 +156,9 @@ if __name__ == "__main__":
 
     sites_error_logs = []
 
+    if vargs.site_to_process:
+        BUOYS_METADATA = BUOYS_METADATA[BUOYS_METADATA['name'].isin(vargs.site_to_process)]
+
     for idx, site in BUOYS_METADATA.iterrows():
 
         GENERAL_LOGGER.info(f"{site['name'].upper()} alerts ===========")
@@ -157,7 +171,8 @@ if __name__ == "__main__":
             raw_data = extract_raw()
 
             if raw_data['raw_data'] is None or raw_data['raw_data'].empty:
-                gap_period_calc = raw_data['window_end_date'] - datetime.now(UTC)
+                # earlier runs already raised the timefence alert while data was still in the window
+                SITE_LOGGER.warning(f"No raw data found since {raw_data['window_start_time']}. Alerts not evaluated.")
                 imos_logging.logging_stop(logger=SITE_LOGGER)
                 continue
 

@@ -10,6 +10,7 @@ from nrt.ecmoorings import ECMoorings
 from nrt.aws.aws import CWBAWSS3
 from nrt.utils import SITE_LOGGER, IMOSLogging, args_auswaves_processing
 from nrt.alerts.email import Email
+from nrt.qc import apply_flat_line_tests
 
 
 def generate_general_logger(vargs):
@@ -134,7 +135,12 @@ def transform(data:dict) -> dict:
     
     SITE_LOGGER.info("Conforming columns to AusWaves format")
     processed_data = ProcessEagleIOData.conform_cols_to_auswaves(processed_data, strip=True)
-    
+
+    # must run before missing columns are created (QF -> 2) and NaNs are filled with -9999
+    if vargs.enable_qualification:
+        SITE_LOGGER.info("Applying QARTOD flat line test")
+        processed_data = apply_flat_line_tests(processed_data, logger=SITE_LOGGER)
+
     SITE_LOGGER.info("Creating missing AusWaves columns with NaN values")
     processed_data = ProcessEagleIOData.create_missing_columns(processed_data)
     
@@ -276,10 +282,10 @@ if __name__ == "__main__":
 
             processed_data_daily = transform(raw_data)
 
-            load(processed_data_daily)
+            # load(processed_data_daily)
             load_data_locally(processed_data_daily)
 
-            ecm_last_update(processed_data_daily)
+            # ecm_last_update(processed_data_daily)
         
             GENERAL_LOGGER.info(f"{site['name'].upper()} processing completed successfully")
             SITE_LOGGER.info(f"{site['name'].upper()} processing completed successfully")

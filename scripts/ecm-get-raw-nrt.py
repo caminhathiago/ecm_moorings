@@ -45,7 +45,7 @@ def extract_raw():
 
     parameters_payload = ECM.create_parameters_payload(SITE_ECM_PARAMETERS)
 
-    start_datetime = datetime.now(UTC) - timedelta(hours=vargs.window)
+    start_datetime = datetime.now(UTC) - timedelta(**{vargs.window_unit: vargs.window})
     end_datetime = datetime.now(UTC) + timedelta(minutes=10)
 
     SITE_LOGGER.info(f"Extracting data from Eagle.io for the period: {start_datetime} to {end_datetime}")
@@ -64,7 +64,7 @@ def extract_raw():
     SITE_LOGGER.info("Converting new data to dataframe")
     new_raw_data = ProcessEagleIOData.response_to_dataframe(raw_data)
 
-    if new_raw_data is None:
+    if new_raw_data is None or new_raw_data.empty:
         SITE_LOGGER.warning(f"""No raw data found for the desired period. The system is either under a gap or no longer operational.""")
         return
 
@@ -200,6 +200,9 @@ if __name__ == "__main__":
     ECM_PARAMETERS = ECM.load_ecm_parameters()
 
     sites_error_logs = []
+
+    if vargs.site_to_process:
+        BUOYS_METADATA = BUOYS_METADATA[BUOYS_METADATA['name'].isin(vargs.site_to_process)]
 
     for idx, site in BUOYS_METADATA.iterrows():
         

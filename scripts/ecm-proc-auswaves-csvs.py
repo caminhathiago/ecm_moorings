@@ -282,10 +282,10 @@ if __name__ == "__main__":
 
             processed_data_daily = transform(raw_data)
 
-            # load(processed_data_daily)
+            load(processed_data_daily)
             load_data_locally(processed_data_daily)
 
-            # ecm_last_update(processed_data_daily)
+            ecm_last_update(processed_data_daily)
         
             GENERAL_LOGGER.info(f"{site['name'].upper()} processing completed successfully")
             SITE_LOGGER.info(f"{site['name'].upper()} processing completed successfully")

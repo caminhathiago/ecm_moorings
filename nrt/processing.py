@@ -23,6 +23,8 @@ class ProcessEagleIOData:
         'WQ - WQ(1) Temperature': ('SST (degC)', False),
         'TEMP_quality_control_sst': ('QF_sst', False),
         "WQ - WQ(3) Salinity PSU": ('Salinity (PSU)', False),
+        # created by the QC; listed so it gets the same leading-space header as QF_sst
+        'QF_salinity': ('QF_salinity', False),
 
         # Winds
         'Weather - WindSpeedAvg': ('WindSpeed (m/s)', False),
@@ -50,7 +52,7 @@ class ProcessEagleIOData:
         'WindSpeed (m/s)', 'WindDirec (deg)',
         'CurrmentMag (m/s)','CurrentDir (deg)',
         'Latitude (deg)', 'Longitude (deg)',
-        'Salinity (PSU)'
+        'Salinity (PSU)', 'QF_salinity'
     )
 
     

@@ -32,14 +32,14 @@ FLAT_LINE_CONFIG = {
         "tolerance": 0.0005,     # EPS (SST reported to 0.001 degC)
     },
     # Salinity is reported to 0.01 PSU and naturally repeats for up to ~6 h
-    # (24 obs), so it needs much longer counts. Not enabled because the
-    # AusWaves CSV has no salinity flag column.
-    # "Salinity (PSU)": {
-    #     "flag_col": "QF_salinity",
-    #     "suspect_threshold": 12,
-    #     "fail_threshold": 24,
-    #     "tolerance": 0.005,
-    # },
+    # (24 obs), so it needs much longer counts: 12/24 = suspect after 3 h /
+    # fail after 6 h of identical values.
+    "Salinity (PSU)": {
+        "flag_col": "QF_salinity",
+        "suspect_threshold": 12,
+        "fail_threshold": 24,
+        "tolerance": 0.005,      # EPS (salinity reported to 0.01 PSU)
+    },
 }
 
 
